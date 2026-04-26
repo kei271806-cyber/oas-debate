@@ -41,7 +41,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<Pro
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY が設定されていません");
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -139,7 +139,7 @@ async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<Pro
 // ─────────────────────────────────────────────────────────────
 export const PROVIDER_NAMES: Record<ProviderId, string> = {
   groq: "Groq (Llama-3.3-70B)",
-  gemini: "Google (Gemini 2.0 Flash)",
+  gemini: "Google (Gemini 2.5 Flash-Lite)",
   cohere: "Cohere (Command R+)",
   mistral: "Mistral AI (mistral-small)",
   openai: "OpenAI (GPT-4o)",
