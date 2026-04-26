@@ -157,11 +157,14 @@ async function callManus(systemPrompt: string, userPrompt: string): Promise<Prov
     const data = (await pollRes.json()) as { messages: ManusMessage[] };
     const messages = data.messages ?? [];
 
-    // 最新の assistant_message を取得
-    const assistantMsg = messages.find((m) => m.type === "assistant_message");
-    if (assistantMsg?.assistant_message?.content) {
-      lastAssistantContent = assistantMsg.assistant_message.content.trim();
-    }
+    // desc順（新しい順）で取得したメッセージを時系列順（古い順）に戻して
+    // 全 assistant_message を結合（複数パートの応答に対応）
+    const allContent = [...messages]
+      .reverse()
+      .filter((m) => m.type === "assistant_message" && m.assistant_message?.content)
+      .map((m) => m.assistant_message!.content.trim())
+      .join("\n\n");
+    if (allContent) lastAssistantContent = allContent;
 
     // 最新の status_update を確認
     const statusMsg = messages.find((m) => m.type === "status_update");
