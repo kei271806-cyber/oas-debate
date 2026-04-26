@@ -287,9 +287,14 @@ export default function DebatePage() {
     const synthMsgId = addThinking(synth, "synthesis");
     try {
       const synthResult = await callDebateAPI({ topic, step: "synthesis", agentId: synth.id, proposals: finalProposals, referenceText: mergedReferenceText });
+      if (synthResult.usedFallback && synthResult.error) {
+        synthResult.content = `（統合エラー: ${synthResult.error}）`;
+      }
       resolveThinking(synthMsgId, synthResult, "synthesis");
-    } catch {
-      resolveThinking(synthMsgId, { content: synth.fallback.synthesis ?? "", providerName: "フォールバック", latencyMs: 0, usedFallback: true }, "synthesis");
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error("[synthesis] fetch error:", errMsg);
+      resolveThinking(synthMsgId, { content: `（統合エラー: ${errMsg}）`, providerName: "エラー", latencyMs: 0, usedFallback: true }, "synthesis");
     }
 
     setStep("s3", "done");

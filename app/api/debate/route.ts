@@ -74,6 +74,8 @@ export async function POST(req: NextRequest) {
     };
     return NextResponse.json(response);
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[debate] step=${step} agent=${agentId} provider=${agent.provider} error:`, errMsg);
     const fallbackContent =
       agent.fallback[step === "synthesis" ? "synthesis" : step] ?? agent.fallback.proposal;
     const response: DebateResponse = {
@@ -81,7 +83,7 @@ export async function POST(req: NextRequest) {
       providerName: "フォールバック",
       latencyMs: Date.now() - start,
       usedFallback: true,
-      error: err instanceof Error ? err.message : String(err),
+      error: errMsg,
     };
     return NextResponse.json(response);
   }
