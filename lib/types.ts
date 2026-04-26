@@ -1,6 +1,6 @@
 // lib/types.ts
 
-export type ProviderId = "groq" | "gemini" | "cohere" | "mistral" | "openai";
+export type ProviderId = "groq" | "gemini" | "cohere" | "mistral" | "openai" | "manus";
 
 export type DebateStep = "proposal" | "reinforcement" | "revision" | "synthesis";
 

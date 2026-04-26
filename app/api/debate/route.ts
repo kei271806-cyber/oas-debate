@@ -1,5 +1,7 @@
 // app/api/debate/route.ts
 
+export const maxDuration = 60; // Vercel関数タイムアウト延長（Manusポーリング対応）
+
 import { NextRequest, NextResponse } from "next/server";
 import { callProvider, PROVIDER_NAMES, getAvailableProviders } from "@/lib/providers";
 import {

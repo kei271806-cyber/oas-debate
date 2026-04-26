@@ -111,6 +111,65 @@ async function callMistral(systemPrompt: string, userPrompt: string): Promise<Pr
 }
 
 // ─────────────────────────────────────────────────────────────
+// Manus（非同期タスクAPI）
+// タスク作成 → ポーリングで結果取得
+// ─────────────────────────────────────────────────────────────
+async function callManus(systemPrompt: string, userPrompt: string): Promise<ProviderCallResult> {
+  const start = Date.now();
+  const apiKey = process.env.MANUS_API_KEY;
+  if (!apiKey) throw new Error("MANUS_API_KEY が設定されていません");
+
+  const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+
+  // 1. タスク作成
+  const createRes = await fetch("https://api.manus.ai/v2/task.create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-manus-api-key": apiKey },
+    body: JSON.stringify({
+      message: { content: [{ type: "text", text: fullPrompt }] },
+      agent_profile: "manus-1.6",
+      hide_in_task_list: true,
+    }),
+  });
+  if (!createRes.ok) throw new Error(`Manus create HTTP ${createRes.status}`);
+  const { task_id } = (await createRes.json()) as { task_id: string };
+
+  // 2. ポーリング（最大55秒）
+  const deadline = Date.now() + 55_000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 2000));
+
+    const pollRes = await fetch(
+      `https://api.manus.ai/v2/task.listMessages?task_id=${task_id}&order=desc&limit=5`,
+      { headers: { "x-manus-api-key": apiKey } }
+    );
+    if (!pollRes.ok) continue;
+
+    const data = (await pollRes.json()) as {
+      messages: { type: string; agent_status?: string; assistant_message?: string; status_detail?: { waiting_for_event_id?: string } }[];
+    };
+
+    const latest = data.messages?.[0];
+    if (!latest) continue;
+
+    if (latest.agent_status === "stopped") {
+      const content = latest.assistant_message?.trim() ?? "";
+      return { content, latencyMs: Date.now() - start };
+    }
+
+    if (latest.agent_status === "waiting" && latest.status_detail?.waiting_for_event_id) {
+      await fetch("https://api.manus.ai/v2/task.confirmAction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-manus-api-key": apiKey },
+        body: JSON.stringify({ task_id, event_id: latest.status_detail.waiting_for_event_id, input: { accept: true } }),
+      });
+    }
+  }
+
+  throw new Error("Manus タイムアウト（55秒）");
+}
+
+// ─────────────────────────────────────────────────────────────
 // OpenAI（openai.ts 準拠）
 // モデル: gpt-4o
 // ─────────────────────────────────────────────────────────────
@@ -143,6 +202,7 @@ export const PROVIDER_NAMES: Record<ProviderId, string> = {
   cohere: "Cohere (Command R+)",
   mistral: "Mistral AI (mistral-small)",
   openai: "OpenAI (GPT-4o)",
+  manus: "Manus (manus-1.6)",
 };
 
 export async function callProvider(
@@ -156,11 +216,12 @@ export async function callProvider(
     case "cohere":  return callCohere(systemPrompt, userPrompt);
     case "mistral": return callMistral(systemPrompt, userPrompt);
     case "openai":  return callOpenAI(systemPrompt, userPrompt);
+    case "manus":   return callManus(systemPrompt, userPrompt);
     default:        throw new Error(`Unknown provider: ${providerId}`);
   }
 }
 
 export function getAvailableProviders(): ProviderId[] {
-  const all: ProviderId[] = ["groq", "gemini", "cohere", "mistral", "openai"];
+  const all: ProviderId[] = ["groq", "gemini", "cohere", "mistral", "openai", "manus"];
   return all.filter((id) => !!process.env[`${id.toUpperCase()}_API_KEY`]);
 }
