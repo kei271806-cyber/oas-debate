@@ -1,5 +1,4 @@
 // app/api/debate/route.ts
-// サーバーサイドでAI APIを呼び出す（APIキーを安全に管理）
 
 import { NextRequest, NextResponse } from "next/server";
 import { callProvider, PROVIDER_NAMES, getAvailableProviders } from "@/lib/providers";
@@ -14,7 +13,7 @@ import { DebateRequest, DebateResponse, Reinforcement } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   const body: DebateRequest = await req.json();
-  const { topic, step, agentId, proposals, originalContent, reinforcements } = body;
+  const { topic, step, agentId, referenceText, proposals, originalContent, reinforcements } = body;
 
   const agent = AGENTS.find((a) => a.id === agentId);
   if (!agent) {
@@ -23,18 +22,18 @@ export async function POST(req: NextRequest) {
 
   const start = Date.now();
 
-  // プロンプト組み立て（shu_debate.ts の build*Prompt に相当）
+  // プロンプト組み立て（referenceText を全ステップに注入）
   let userPrompt = "";
   switch (step) {
     case "proposal":
-      userPrompt = buildProposalPrompt(topic, agent.roleLabel);
+      userPrompt = buildProposalPrompt(topic, agent.roleLabel, referenceText);
       break;
 
     case "reinforcement": {
       const targets = (proposals ?? [])
         .filter((p) => p.agentId !== agentId)
         .map((p) => ({ agentName: p.agentName, roleLabel: p.roleLabel, content: p.content }));
-      userPrompt = buildReinforcementPrompt(topic, agent.roleLabel, targets);
+      userPrompt = buildReinforcementPrompt(topic, agent.roleLabel, targets, referenceText);
       break;
     }
 
@@ -42,7 +41,8 @@ export async function POST(req: NextRequest) {
       userPrompt = buildRevisionPrompt(
         topic,
         originalContent ?? "",
-        (reinforcements ?? []) as Reinforcement[]
+        (reinforcements ?? []) as Reinforcement[],
+        referenceText
       );
       break;
 
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         reinforcements: p.reinforcements,
         revisedContent: p.revisedContent,
       }));
-      userPrompt = buildSynthesisPrompt(topic, synthInputs);
+      userPrompt = buildSynthesisPrompt(topic, synthInputs, referenceText);
       break;
     }
 
@@ -62,7 +62,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid step" }, { status: 400 });
   }
 
-  // プロバイダ呼び出し（callProvider がフォールバックも管理）
   try {
     const result = await callProvider(agent.provider, agent.persona, userPrompt);
     const response: DebateResponse = {
@@ -73,8 +72,8 @@ export async function POST(req: NextRequest) {
     };
     return NextResponse.json(response);
   } catch (err) {
-    // APIキー未設定 or エラー → フォールバック
-    const fallbackContent = agent.fallback[step === "synthesis" ? "synthesis" : step] ?? agent.fallback.proposal;
+    const fallbackContent =
+      agent.fallback[step === "synthesis" ? "synthesis" : step] ?? agent.fallback.proposal;
     const response: DebateResponse = {
       content: fallbackContent ?? "（応答なし）",
       providerName: "フォールバック",
@@ -86,7 +85,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// 利用可能なプロバイダ一覧を返すGETエンドポイント
 export async function GET() {
   const available = getAvailableProviders();
   return NextResponse.json({

@@ -176,27 +176,32 @@ Month 5：本契約提案（2年契約・月額400万円〜）
 
 // ── プロンプト生成（shu_debate.ts の build*Prompt 群に相当） ──────────
 
-export function buildProposalPrompt(topic: string, roleLabel: string): string {
-  return `議題：${topic}
+export function buildProposalPrompt(topic: string, roleLabel: string, referenceText?: string): string {
+  const ref = referenceText ? buildReferenceBlock(referenceText) : "";
+  return `${ref}議題：${topic}
 
 あなたの役割（${roleLabel}）の視点から、この議題への具体的な提案をしてください。
+参考資料がある場合はその内容を根拠として活用してください。
 数値・手順・具体名を含め、400字以内で日本語で回答してください。`;
 }
 
 export function buildReinforcementPrompt(
   topic: string,
   roleLabel: string,
-  targets: { agentName: string; roleLabel: string; content: string }[]
+  targets: { agentName: string; roleLabel: string; content: string }[],
+  referenceText?: string
 ): string {
+  const ref = referenceText ? buildReferenceBlock(referenceText) : "";
   const list = targets
     .map((t) => `【${t.agentName}（${t.roleLabel}）の提案】\n${t.content.slice(0, 350)}`)
     .join("\n\n---\n\n");
-  return `議題：${topic}
+  return `${ref}議題：${topic}
 
 仲間の提案：
 ${list}
 
 ルール：否定・批判は禁止です。各提案を「補強・発展」させてください。
+参考資料がある場合はその内容を根拠として活用してください。
 あなたの役割（${roleLabel}）の視点から「〇〇の提案にさらに△△を加えると良くなる」という形で
 各提案への補強を加えてください。400字以内で日本語で回答してください。`;
 }
@@ -204,12 +209,14 @@ ${list}
 export function buildRevisionPrompt(
   topic: string,
   originalContent: string,
-  reinforcements: Reinforcement[]
+  reinforcements: Reinforcement[],
+  referenceText?: string
 ): string {
+  const ref = referenceText ? buildReferenceBlock(referenceText) : "";
   const rList = reinforcements
     .map((r) => `・${r.from}からの補強：${r.content}`)
     .join("\n");
-  return `議題：${topic}
+  return `${ref}議題：${topic}
 
 あなたの元の提案：
 ${originalContent}
@@ -217,13 +224,16 @@ ${originalContent}
 仲間からの補強：
 ${rList}
 
+参考資料がある場合はその内容を根拠として活用してください。
 これらの補強を取り込んで、あなたの提案を再構築してください。400字以内で日本語で回答してください。`;
 }
 
 export function buildSynthesisPrompt(
   topic: string,
-  proposals: { agentName: string; roleLabel: string; content: string; reinforcements: Reinforcement[]; revisedContent: string }[]
+  proposals: { agentName: string; roleLabel: string; content: string; reinforcements: Reinforcement[]; revisedContent: string }[],
+  referenceText?: string
 ): string {
+  const ref = referenceText ? buildReferenceBlock(referenceText) : "";
   const list = proposals
     .map(
       (p) =>
@@ -234,12 +244,27 @@ export function buildSynthesisPrompt(
     )
     .join("\n\n---\n\n");
 
-  return `議題：${topic}
+  return `${ref}議題：${topic}
 
 全メンバーの提案・補強・再構築案：
 ${list}
 
-上記を統合した最終アクションプランを作成してください。
+参考資料がある場合はその内容も踏まえて、上記を統合した最終アクションプランを作成してください。
 各メンバーの視点を尊重しながら矛盾を解消し、実行可能な1つの提案にまとめてください。
 800字以内で日本語で回答してください。`;
+}
+
+// ── 参考資料ブロック生成 ──────────────────────────────────────────────────
+// 全プロンプトの先頭に挿入し、AIが資料を読んだ上で議論できるようにする
+export function buildReferenceBlock(referenceText: string): string {
+  const trimmed = referenceText.trim().slice(0, 8000); // トークン節約で上限設定
+  return `【参考資料】
+以下の資料を熟読した上で、あなたの役割の視点から議論に参加してください。
+資料の内容を根拠として活用し、具体的な数値・固有名詞・課題を引用しながら発言してください。
+
+---
+${trimmed}
+---
+
+`;
 }

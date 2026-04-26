@@ -1,11 +1,9 @@
 // lib/types.ts
-// orchestrator.ts / types.ts の設計を継承
 
 export type ProviderId = "groq" | "gemini" | "cohere" | "mistral" | "openai";
 
 export type DebateStep = "proposal" | "reinforcement" | "revision" | "synthesis";
 
-// orchestrator.ts の AIResponse に相当
 export type AIResponse = {
   provider: ProviderId;
   providerName: string;
@@ -16,13 +14,11 @@ export type AIResponse = {
   usedFallback: boolean;
 };
 
-// shu_debate.ts の Reinforcement に相当
 export type Reinforcement = {
   from: string;
   content: string;
 };
 
-// shu_debate.ts の Proposal に相当
 export type Proposal = {
   agentId: string;
   agentName: string;
@@ -35,7 +31,6 @@ export type Proposal = {
   success: boolean;
 };
 
-// shu_debate.ts の Synthesis に相当
 export type Synthesis = {
   content: string;
   latencyMs: number;
@@ -43,15 +38,14 @@ export type Synthesis = {
   success: boolean;
 };
 
-// API リクエスト/レスポンス型
 export type DebateRequest = {
   topic: string;
   step: DebateStep;
   agentId: string;
-  // step別の追加データ
-  proposals?: Proposal[];     // reinforcement / revision / synthesis で使用
-  originalContent?: string;   // revision で使用
-  reinforcements?: Reinforcement[]; // revision で使用
+  referenceText?: string;
+  proposals?: Proposal[];
+  originalContent?: string;
+  reinforcements?: Reinforcement[];
 };
 
 export type DebateResponse = {
@@ -60,4 +54,10 @@ export type DebateResponse = {
   latencyMs: number;
   usedFallback: boolean;
   error?: string;
+};
+
+export type ReferenceFile = {
+  name: string;
+  text: string;
+  size: number;
 };
