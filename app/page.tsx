@@ -89,7 +89,28 @@ async function callDebateAPI(payload: object): Promise<DebateResponse> {
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`API error ${res.status}`);
-  return res.json();
+  const result: DebateResponse = await res.json();
+
+  // Manus の非同期タスクはブラウザ側でポーリング
+  if (result.pending && result.task_id) {
+    const startMs = Date.now();
+    while (Date.now() - startMs < 180_000) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const poll = await fetch("/api/manus-poll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_id: result.task_id }),
+      });
+      if (!poll.ok) continue;
+      const { done, content } = await poll.json();
+      if (done) {
+        return { ...result, content, pending: false, latencyMs: Date.now() - startMs };
+      }
+    }
+    throw new Error("Manus タイムアウト（3分）");
+  }
+
+  return result;
 }
 
 // ── メインコンポーネント ──────────────────────────────────────────────────

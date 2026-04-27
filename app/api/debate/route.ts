@@ -66,6 +66,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await callProvider(agent.provider, agent.persona, userPrompt);
+    // Manus はタスク作成のみ行い task_id を返す → クライアント側でポーリング
+    if (result.task_id) {
+      return NextResponse.json({
+        content: "", providerName: PROVIDER_NAMES[agent.provider],
+        latencyMs: result.latencyMs, usedFallback: false,
+        task_id: result.task_id, pending: true,
+      } as DebateResponse);
+    }
     const response: DebateResponse = {
       content: result.content,
       providerName: PROVIDER_NAMES[agent.provider],

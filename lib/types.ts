@@ -54,6 +54,8 @@ export type DebateResponse = {
   latencyMs: number;
   usedFallback: boolean;
   error?: string;
+  task_id?: string;
+  pending?: boolean;
 };
 
 export type ReferenceFile = {

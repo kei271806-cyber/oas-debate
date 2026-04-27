@@ -6,6 +6,7 @@ import { ProviderId } from "./types";
 export type ProviderCallResult = {
   content: string;
   latencyMs: number;
+  task_id?: string; // Manus非同期タスク用
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -112,80 +113,25 @@ async function callMistral(systemPrompt: string, userPrompt: string): Promise<Pr
 
 // ─────────────────────────────────────────────────────────────
 // Manus（非同期タスクAPI）
-// タスク作成 → ポーリングで結果取得
+// タスク作成のみ行い task_id を返す → ポーリングはブラウザ側で実施
 // ─────────────────────────────────────────────────────────────
 async function callManus(systemPrompt: string, userPrompt: string): Promise<ProviderCallResult> {
   const start = Date.now();
   const apiKey = process.env.MANUS_API_KEY;
   if (!apiKey) throw new Error("MANUS_API_KEY が設定されていません");
 
-  const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-
-  // 1. タスク作成
-  const createRes = await fetch("https://api.manus.ai/v2/task.create", {
+  const res = await fetch("https://api.manus.ai/v2/task.create", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-manus-api-key": apiKey },
     body: JSON.stringify({
-      message: { content: [{ type: "text", text: fullPrompt }] },
+      message: { content: [{ type: "text", text: `${systemPrompt}\n\n${userPrompt}` }] },
       agent_profile: "manus-1.6-lite",
       hide_in_task_list: true,
     }),
   });
-  if (!createRes.ok) throw new Error(`Manus create HTTP ${createRes.status}`);
-  const { task_id } = (await createRes.json()) as { task_id: string };
-
-  // 2. ポーリング（最大55秒）
-  // メッセージ構造: { type, assistant_message?: { content }, status_update?: { agent_status }, ... }
-  type ManusMessage = {
-    type: string;
-    assistant_message?: { content: string };
-    status_update?: { agent_status: string; waiting_for_event_id?: string };
-  };
-
-  const deadline = Date.now() + 40_000;
-  let lastAssistantContent = "";
-
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 2500));
-
-    const pollRes = await fetch(
-      `https://api.manus.ai/v2/task.listMessages?task_id=${task_id}&order=desc&limit=20`,
-      { headers: { "x-manus-api-key": apiKey } }
-    );
-    if (!pollRes.ok) continue;
-
-    const data = (await pollRes.json()) as { messages: ManusMessage[] };
-    const messages = data.messages ?? [];
-
-    // desc順（新しい順）で取得したメッセージを時系列順（古い順）に戻して
-    // 全 assistant_message を結合（複数パートの応答に対応）
-    const allContent = [...messages]
-      .reverse()
-      .filter((m) => m.type === "assistant_message" && m.assistant_message?.content)
-      .map((m) => m.assistant_message!.content.trim())
-      .join("\n\n");
-    if (allContent) lastAssistantContent = allContent;
-
-    // 最新の status_update を確認
-    const statusMsg = messages.find((m) => m.type === "status_update");
-    const agentStatus = statusMsg?.status_update?.agent_status;
-
-    if (agentStatus === "stopped" || agentStatus === "error") {
-      return { content: lastAssistantContent || "（応答なし）", latencyMs: Date.now() - start };
-    }
-
-    if (agentStatus === "waiting" && statusMsg?.status_update?.waiting_for_event_id) {
-      await fetch("https://api.manus.ai/v2/task.confirmAction", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-manus-api-key": apiKey },
-        body: JSON.stringify({ task_id, event_id: statusMsg.status_update.waiting_for_event_id, input: { accept: true } }),
-      });
-    }
-  }
-
-  // タイムアウト時でも content があれば返す
-  if (lastAssistantContent) return { content: lastAssistantContent, latencyMs: Date.now() - start };
-  throw new Error("Manus タイムアウト（55秒）");
+  if (!res.ok) throw new Error(`Manus create HTTP ${res.status}`);
+  const { task_id } = (await res.json()) as { task_id: string };
+  return { content: "", latencyMs: Date.now() - start, task_id };
 }
 
 // ─────────────────────────────────────────────────────────────
