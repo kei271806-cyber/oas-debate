@@ -142,7 +142,7 @@ async function callManus(systemPrompt: string, userPrompt: string): Promise<Prov
     status_update?: { agent_status: string; waiting_for_event_id?: string };
   };
 
-  const deadline = Date.now() + 55_000;
+  const deadline = Date.now() + 40_000;
   let lastAssistantContent = "";
 
   while (Date.now() < deadline) {

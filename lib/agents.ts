@@ -192,9 +192,7 @@ export function buildSynthesisPrompt(
     .map(
       (p) =>
         `【${p.agentName}（${p.roleLabel}）】
-元提案：${p.content.slice(0, 250)}
-補強受信：${p.reinforcements.map((r) => `${r.from}→${r.content.slice(0, 80)}`).join("、") || "なし"}
-再構築案：${(p.revisedContent || p.content).slice(0, 250)}`
+再構築案：${(p.revisedContent || p.content).slice(0, 200)}`
     )
     .join("\n\n---\n\n");
 
